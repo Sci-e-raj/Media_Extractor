@@ -1,13 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.extractor import extract_info
 from fastapi.responses import StreamingResponse
 import subprocess
 
-app = FastAPI(title="Local Media Extractor")
+from app.extractor import extract_info
+
+app = FastAPI(title="Local YouTube Downloader")
 
 class InfoRequest(BaseModel):
     url: str
+
+
+class DownloadRequest(BaseModel):
+    url: str
+    format_id: str
 
 @app.get("/")
 def health():
@@ -16,6 +22,10 @@ def health():
 
 @app.post("/info")
 def info(req: InfoRequest):
+    """
+    Step 1:
+    Get metadata + available formats
+    """
     result = extract_info(req.url)
 
     if "error" in result:
@@ -24,22 +34,20 @@ def info(req: InfoRequest):
     return result
 
 @app.post("/download")
-def download(req: dict):
-    url = req.get("url")
-    format_id = req.get("format_id")
-
-    if not url or not format_id:
-        raise HTTPException(status_code=400, detail="url and format_id required")
-
+def download(req: DownloadRequest):
+    """
+    Step 2:
+    Stream selected format directly to browser
+    """
     process = subprocess.Popen(
-        ["yt-dlp", "-f", format_id, "-o", "-", url],
+        ["yt-dlp", "-f", req.format_id, "-o", "-", req.url],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
 
     def stream():
         while True:
-            chunk = process.stdout.read(1024 * 1024)  # 1MB chunks
+            chunk = process.stdout.read(1024 * 1024)  # 1MB
             if not chunk:
                 break
             yield chunk
