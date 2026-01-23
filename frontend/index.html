@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>YouTube Downloader (Local)</title>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #0f0f0f;
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        padding-top: 40px;
+      }
+
+      .container {
+        width: 600px;
+        background: #1c1c1c;
+        padding: 20px;
+        border-radius: 8px;
+      }
+
+      input,
+      button,
+      select {
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        border-radius: 4px;
+        border: none;
+        font-size: 16px;
+      }
+
+      button {
+        background: #ff0000;
+        color: white;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        background: #555;
+        cursor: not-allowed;
+      }
+
+      .formats {
+        margin-top: 15px;
+      }
+
+      .info {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>YouTube Downloader (Local)</h2>
+
+      <input id="url" placeholder="Paste YouTube URL here" />
+
+      <button onclick="fetchInfo()">Fetch Info</button>
+
+      <div class="info" id="videoInfo"></div>
+
+      <div class="formats" id="formats"></div>
+
+      <button id="downloadBtn" onclick="download()" disabled>Download</button>
+    </div>
+
+    <script>
+      let selectedFormat = null;
+      let currentUrl = null;
+
+      async function fetchInfo() {
+        const url = document.getElementById("url").value;
+        const infoDiv = document.getElementById("videoInfo");
+        const formatsDiv = document.getElementById("formats");
+
+        infoDiv.innerText = "Fetching video info...";
+        formatsDiv.innerHTML = "";
+        selectedFormat = null;
+        currentUrl = url;
+        document.getElementById("downloadBtn").disabled = true;
+
+        const res = await fetch("http://127.0.0.1:8000/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          infoDiv.innerText = "Failed to fetch info";
+          return;
+        }
+
+        infoDiv.innerText = `Title: ${data.title} | Duration: ${data.duration}s`;
+
+        // Build format selector
+        const select = document.createElement("select");
+        select.onchange = () => {
+          selectedFormat = select.value;
+          document.getElementById("downloadBtn").disabled = false;
+        };
+
+        const defaultOption = document.createElement("option");
+        defaultOption.innerText = "Select format";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        select.appendChild(defaultOption);
+
+        data.formats.forEach((f) => {
+          const option = document.createElement("option");
+          option.value = f.format_id;
+          option.innerText = `${f.resolution} | ${f.filesize_mb} MB | ${f.ext}`;
+          select.appendChild(option);
+        });
+
+        formatsDiv.appendChild(select);
+      }
+
+      function download() {
+        if (!selectedFormat || !currentUrl) return;
+
+        fetch("http://127.0.0.1:8000/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: currentUrl,
+            format_id: selectedFormat,
+          }),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              alert("Download failed");
+              return;
+            }
+            return response.blob();
+          })
+          .then((blob) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "video.mp4";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          });
+      }
+    </script>
+  </body>
+</html>
